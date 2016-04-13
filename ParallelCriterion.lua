@@ -22,7 +22,6 @@ function ParallelCriterion:updateOutput(input, target)
    for i,criterion in ipairs(self.criterions) do
       local target = self.repeatTarget and target or target[i]
       self.output = self.output + self.weights[i]*criterion:updateOutput(input[i],target)
-      self.allCosts[i] = self.criterions[i].allCosts or self.criterions[i].output
    end
    return self.output
 end
@@ -40,15 +39,12 @@ end
 function ParallelCriterion:type(type, tensorCache)
    self.gradInput = {}
    return parent.type(self, type, tensorCache)
-end
+end  
 
-function ParallelCriterion:printCosts(indent)
-   local indent = indent or 0
-   for i,criterion in ipairs(self.criterions) do
-      if criterion.printCosts then
-         criterion:printCosts(indent+1)
-      else
-         print(string.rep('  ',indent)..criterion.output)
-      end
-   end
-end    
+function ParallelCriterion:getAllCosts()
+    local costs = {}
+    for i,c in ipairs(self.criterions) do
+        costs[i] = c.getAllCosts and c:getAllCosts() or c.output
+    end
+    return costs
+end

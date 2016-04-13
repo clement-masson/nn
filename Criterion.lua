@@ -54,3 +54,7 @@ function Criterion:__call__(input, target)
    self.gradInput = self:backward(input, target)
    return self.output, self.gradInput
 end
+
+function Criterion:clearState()
+  return nn.utils.clear(self, 'output', 'gradInput')
+end
