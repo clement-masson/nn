@@ -4227,6 +4227,43 @@ function nntest.LookupTable()
    end
    local err = padw_sum - padw:sum()
    mytester:assertlt(err,precision, 'padding update error ')
+   -- test whether the weights changes accordingly when maxNorm is not nil
+   local all_index = torch.randperm(totalIndex):int()
+   -- input can have duplicates
+   local input = torch.repeatTensor(all_index:narrow(1,1,nIndex), 2)
+   local maxNorm = math.random()
+   for _, normType in ipairs{1, 2, math.random()} do
+      local module = nn.LookupTable(totalIndex, entry_size, 0, maxNorm, normType)
+      local oriW = module.weight:clone()
+      output = module:updateOutput(input)
+      -- check output is of small norm
+      for j = 1,output:size(1) do
+         local norm = torch.norm(output:select(1, j), normType)
+         if norm > maxNorm then
+            local err = norm - maxNorm;
+            mytester:assertlt(math.abs(err), precision, string.format(
+               'output after renorm exceeds maxNorm=[%f] with normType=[%f]', maxNorm, normType))
+         end
+      end
+      -- check the update of the module.weight
+      for j = 1,totalIndex do
+         local k = all_index[j]
+         if j <= nIndex then -- k is an index in "input"
+            local norm = torch.norm(module.weight:select(1, k), normType)
+            local oriNorm = torch.norm(oriW:select(1, k), normType)
+            if oriNorm > maxNorm then
+               local err = norm - maxNorm
+               mytester:assertlt(math.abs(err), precision, 'unexpected norm after renorm')
+            else
+               local err = norm - oriNorm
+               mytester:assertlt(math.abs(err), precision, 'unpexpected norm after renorm')
+            end
+         else -- k is not an index in "input"
+            local err = module.weight:select(1,k):sum() - oriW:select(1,k):sum()
+            mytester:assertlt(math.abs(err), precision, 'unexpected changes in weight after renorm')
+         end
+      end
+   end
 end
 
 function nntest.AddConstant()
@@ -4455,6 +4492,7 @@ function nntest.SelectTable()
       torch.rand(3,4,5),
       {torch.rand(3,4,5), torch.rand(3,4,5)}
    }
+   
    module = nn.SelectTable(1)
    local output = module:forward(input1)
    equal(output, input1[1], "output dimension 1")
@@ -4466,6 +4504,32 @@ function nntest.SelectTable()
    gradInput = module:backward(input2, output)
    mytester:assert(#gradInput == #input2, "Table lengths")
    mytester:assert(#gradInput[2] == #input2[2], "Sub-Table lengths")
+   
+   -- test on tables of increasing size
+   local input1 = {torch.rand(3,4,5), torch.rand(3,4,5)}
+   local input2 = {torch.rand(3,4,5), torch.rand(3,4,5), torch.rand(3,4,5)}
+   local gradOutput1 = torch.randn(3,4,5)
+   local gradOutput2 = torch.randn(3,4,5)
+   
+   local module1 = nn.SelectTable(-1)
+   local output1 = module1:forward(input1):clone()
+   local output2 = module1:forward(input2)
+   local gradInput_ = module1:backward(input1, gradOutput1)
+   local gradInput1 = {}
+   for k,v in ipairs(gradInput_) do gradInput1[k] = v:clone() end
+   local gradInput2 = module1:backward(input2, gradOutput2)
+   
+   local module3 = nn.SelectTable(-1)
+   local module4 = nn.SelectTable(-1)
+   local output3 = module3:forward(input1)
+   local output4 = module4:forward(input2)
+   local gradInput3 = module3:backward(input1, gradOutput1)
+   local gradInput4 = module4:backward(input2, gradOutput2)
+   
+   equal(output1, output3, "output 1 and 3")
+   equal(output2, output4, "output 2 and 4")
+   equal(gradInput1, gradInput3, "gradInput 1 and 3")
+   equal(gradInput2, gradInput4, "gradInput 2 and 4")
 end
 
 function nntest.MixtureTable()
