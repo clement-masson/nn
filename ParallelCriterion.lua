@@ -6,7 +6,6 @@ function ParallelCriterion:__init(repeatTarget)
    self.weights = {}
    self.gradInput = {}
    self.repeatTarget = repeatTarget
-   self.allCosts = {}
 end
 
 function ParallelCriterion:add(criterion, weight)

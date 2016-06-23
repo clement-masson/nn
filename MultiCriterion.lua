@@ -4,7 +4,6 @@ function MultiCriterion:__init()
    parent.__init(self)
    self.criterions = {}
    self.weights = torch.DoubleStorage()
-   self.allCosts = {}
 end
 
 function MultiCriterion:add(criterion, weight)
